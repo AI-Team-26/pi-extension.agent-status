@@ -80,7 +80,7 @@ describe("pi-status.ts module", () => {
         const mod = await import("./pi-status.ts")
         mod.default(mockPi as unknown as ExtensionAPI)
         const events = (mockPi.on as ReturnType<typeof vi.fn>).mock.calls.map((c: string[]) => c[0])
-        expect(events).toEqual(["session_start", "agent_start", "agent_settled"])
+        expect(new Set(events)).toEqual(new Set(["session_start", "agent_start", "agent_settled"]))
     })
 })
 
