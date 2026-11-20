@@ -4,13 +4,19 @@
  * Tests:
  * 1.  Module loads and exports a default function
  * 2.  Only the 3 lifecycle handlers are registered
- * 3.  `session_start` → green checkmark in title (deferred via setImmediate)
+ * 3.  `session_start` → idle icon in title (deferred via setImmediate)
  * 4.  `agent_start` → spinner starts in title
- * 5.  `agent_settled` → checkmark restored, spinner stopped
- * 6.  Context ≤50% → no indicator in title
- * 7.  Context >50% → [N%] in title
- * 8.  Context ≥90% → ![N%]! in title
- * 9.  Context null → no indicator
+ * 5.  `agent_settled` → idle icon restored, spinner stopped
+ * 6.  `agent_settled` after an abort → idle icon, no further frames
+ * 7.  `PI_STATUS_IDLE_ICON` overrides the idle icon
+ * 8.  Context ≤50% → no indicator in title
+ * 9.  Context >50% → [N%] in title
+ * 10. Context ≥90% → ![N%]! in title
+ * 11. Context null → no indicator
+ * 12. Spinner never shows the context indicator
+ * 13. Stale session: spinner tick throws no error and stops
+ * 14. Stale session: `agent_start` arms no interval when the first frame fails
+ * 15. Stale session: `agent_settled` still shows the idle icon
  */
 
 import path from "node:path"
@@ -173,6 +179,26 @@ describe("stale session context", () => {
             const callsAfterStaleTick = (ctx.ui.setTitle as ReturnType<typeof vi.fn>).mock.calls.length
             vi.advanceTimersByTime(6000)
             expect((ctx.ui.setTitle as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsAfterStaleTick)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    it("agent_start arms no interval when the first frame cannot be drawn", async () => {
+        vi.useFakeTimers()
+        try {
+            const ctx = createMockCtx()
+            ;(mockPi.getSessionName as ReturnType<typeof vi.fn>).mockImplementation(() => {
+                throw new Error("This extension instance was replaced")
+            })
+
+            await mockPi._handlers.get("agent_start")!({}, ctx)
+            vi.advanceTimersByTime(10_000)
+
+            // One attempt for the first frame and nothing after it: an armed interval
+            // would retry the stale lookup on every tick.
+            expect(mockPi.getSessionName).toHaveBeenCalledTimes(1)
+            expect(ctx.ui.setTitle).not.toHaveBeenCalled()
         } finally {
             vi.useRealTimers()
         }

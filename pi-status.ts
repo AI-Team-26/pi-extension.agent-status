@@ -86,9 +86,13 @@ export default function (pi: ExtensionAPI) {
         safeSetTitle(ctx, `${IDLE_ICON}${indicator} ${base}`)
     }
 
-    function showSpinnerFrame() {
+    /** Draws one spinner frame. Returns false when the spinner gave up and must not be armed. */
+    function showSpinnerFrame(): boolean {
         const ctx = currentCtx
-        if (!ctx) return stopSpinner()
+        if (!ctx) {
+            stopSpinner()
+            return false
+        }
         let base: string
         try {
             base = getBaseTitle(pi)
@@ -96,17 +100,21 @@ export default function (pi: ExtensionAPI) {
             // A throw inside the interval callback is fatal to pi, and a stale instance
             // can never produce a valid title again, so stop instead of retrying.
             log(`spinner frame skipped: ${err}`)
-            return stopSpinner()
+            stopSpinner()
+            return false
         }
         safeSetTitle(ctx, `${SPINNER_FRAMES[frameIndex]} ${base}`)
         frameIndex = (frameIndex + 1) % SPINNER_FRAMES.length
+        return true
     }
 
     function startSpinner(ctx: ExtensionContext) {
         currentCtx = ctx
         if (timer) return
-        showSpinnerFrame()
-        timer = setInterval(showSpinnerFrame, 2000)
+        if (!showSpinnerFrame()) return
+        timer = setInterval(() => {
+            showSpinnerFrame()
+        }, 2000)
         ;(timer as any).unref?.()
         log("spinner started")
     }
