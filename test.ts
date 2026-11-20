@@ -144,6 +144,53 @@ describe("extension handlers", () => {
     })
 })
 
+// ── Stale session context ────────────────────────────────
+// After /new, /resume, /fork or /reload the old extension instance is
+// invalidated: pi.getSessionName() and ctx.getContextUsage() throw. A throw
+// inside the interval callback is fatal to pi, so both must be contained.
+
+describe("stale session context", () => {
+    let mockPi: ReturnType<typeof createMockPi>
+
+    beforeEach(async () => {
+        mockPi = createMockPi()
+        const mod = await import("./pi-status.ts")
+        mod.default(mockPi as unknown as ExtensionAPI)
+    })
+
+    it("spinner tick survives a throwing getSessionName and stops", async () => {
+        vi.useFakeTimers()
+        try {
+            const ctx = createMockCtx()
+            await mockPi._handlers.get("agent_start")!({}, ctx)
+
+            ;(mockPi.getSessionName as ReturnType<typeof vi.fn>).mockImplementation(() => {
+                throw new Error("This extension instance was replaced")
+            })
+
+            expect(() => vi.advanceTimersByTime(2000)).not.toThrow()
+
+            const callsAfterStaleTick = (ctx.ui.setTitle as ReturnType<typeof vi.fn>).mock.calls.length
+            vi.advanceTimersByTime(6000)
+            expect((ctx.ui.setTitle as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsAfterStaleTick)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    it("agent_settled survives a throwing getContextUsage and still shows idle", async () => {
+        const ctx = createMockCtx({
+            getContextUsage: () => {
+                throw new Error("This extension instance was replaced")
+            },
+        })
+        await mockPi._handlers.get("agent_start")!({}, ctx)
+
+        expect(() => mockPi._handlers.get("agent_settled")!({ aborted: false }, ctx)).not.toThrow()
+        expect(ctx.ui.setTitle).toHaveBeenLastCalledWith(`${AGENT_ICON} ${IDLE_ICON} ${EXPECTED_BASE_TITLE}`)
+    })
+})
+
 // ── Done icon override ─────────────────────────────────
 
 describe("idle icon override", () => {

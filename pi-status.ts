@@ -69,13 +69,36 @@ export default function (pi: ExtensionAPI) {
 
     function restoreTitle(ctx: ExtensionContext) {
         log("restoring idle title")
-        safeSetTitle(ctx, `${IDLE_ICON}${getContextIndicator(ctx)} ${getBaseTitle(pi)}`)
+        let indicator = ""
+        try {
+            indicator = getContextIndicator(ctx)
+        } catch (err) {
+            // Context usage comes from live session state, which throws once the instance is stale.
+            log(`context indicator unavailable: ${err}`)
+        }
+        let base: string
+        try {
+            base = getBaseTitle(pi)
+        } catch (err) {
+            log(`base title unavailable: ${err}`)
+            return
+        }
+        safeSetTitle(ctx, `${IDLE_ICON}${indicator} ${base}`)
     }
 
     function showSpinnerFrame() {
         const ctx = currentCtx
-        if (!ctx) return
-        safeSetTitle(ctx, `${SPINNER_FRAMES[frameIndex]} ${getBaseTitle(pi)}`)
+        if (!ctx) return stopSpinner()
+        let base: string
+        try {
+            base = getBaseTitle(pi)
+        } catch (err) {
+            // A throw inside the interval callback is fatal to pi, and a stale instance
+            // can never produce a valid title again, so stop instead of retrying.
+            log(`spinner frame skipped: ${err}`)
+            return stopSpinner()
+        }
+        safeSetTitle(ctx, `${SPINNER_FRAMES[frameIndex]} ${base}`)
         frameIndex = (frameIndex + 1) % SPINNER_FRAMES.length
     }
 
