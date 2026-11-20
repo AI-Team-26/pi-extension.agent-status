@@ -3,18 +3,14 @@
  *
  * Tests:
  * 1.  Module loads and exports a default function
- * 2.  All 6 lifecycle handlers are registered
+ * 2.  Only the 3 lifecycle handlers are registered
  * 3.  `session_start` → green checkmark in title (deferred via setImmediate)
- * 4.  `input` → spinner starts in title
- * 5.  `input` from any source starts spinner
- * 6.  `agent_start` → spinner starts in title
- * 7.  `turn_start` → spinner starts in title (multi-turn)
- * 8.  `agent_end` → checkmark restored, spinner stopped
- * 9.  `session_shutdown` → plain base title
- * 10. Context ≤50% → no indicator in title
- * 11. Context >50% → [N%] in title
- * 12. Context ≥90% → ![N%]! in title
- * 13. Context null → no indicator
+ * 4.  `agent_start` → spinner starts in title
+ * 5.  `agent_settled` → checkmark restored, spinner stopped
+ * 6.  Context ≤50% → no indicator in title
+ * 7.  Context >50% → [N%] in title
+ * 8.  Context ≥90% → ![N%]! in title
+ * 9.  Context null → no indicator
  */
 
 import path from "node:path"
@@ -79,18 +75,12 @@ describe("pi-status.ts module", () => {
         expect(typeof mod.default).toBe("function")
     })
 
-    it("registers all six lifecycle handlers", async () => {
+    it("registers only the three lifecycle handlers", async () => {
         const mockPi = createMockPi()
         const mod = await import("./pi-status.ts")
         mod.default(mockPi as unknown as ExtensionAPI)
-        expect(mockPi.on).toHaveBeenCalled()
-        const events = new Set((mockPi.on as ReturnType<typeof vi.fn>).mock.calls.map((c: string[]) => c[0]))
-        expect(events.has("session_start")).toBe(true)
-        expect(events.has("input")).toBe(true)
-        expect(events.has("agent_start")).toBe(true)
-        expect(events.has("turn_start")).toBe(true)
-        expect(events.has("agent_end")).toBe(true)
-        expect(events.has("session_shutdown")).toBe(true)
+        const events = (mockPi.on as ReturnType<typeof vi.fn>).mock.calls.map((c: string[]) => c[0])
+        expect(events).toEqual(["session_start", "agent_start", "agent_settled"])
     })
 })
 
@@ -117,33 +107,6 @@ describe("extension handlers", () => {
         expect(ctx.ui.setStatus).not.toHaveBeenCalled()
     })
 
-    it("input (interactive) starts spinner in title", async () => {
-        const ctx = createMockCtx() // 25% ≤ 50% → no indicator
-        const handler = mockPi._handlers.get("input")!
-        await handler({ source: "interactive", text: "hello" }, ctx)
-
-        await new Promise((r) => setTimeout(r, 150))
-
-        expect(ctx.ui.setTitle).toHaveBeenCalled()
-        const firstCall = (ctx.ui.setTitle as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
-        // Just spinner + base title, no indicator (25% ≤ 50%)
-        expect(firstCall).toMatch(SPINNER_FRAME_REGEX)
-        expect(ctx.ui.setStatus).not.toHaveBeenCalled()
-    })
-
-    it("input from any source starts spinner", async () => {
-        const ctx = createMockCtx()
-        const handler = mockPi._handlers.get("input")!
-        await handler({ source: "extension", text: "internal" }, ctx)
-
-        await new Promise((r) => setTimeout(r, 150))
-
-        expect(ctx.ui.setTitle).toHaveBeenCalled()
-        const firstCall = (ctx.ui.setTitle as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
-        expect(firstCall).toMatch(SPINNER_FRAME_REGEX)
-        expect(ctx.ui.setStatus).not.toHaveBeenCalled()
-    })
-
     it("agent_start starts spinner in title", async () => {
         const ctx = createMockCtx()
         const handler = mockPi._handlers.get("agent_start")!
@@ -157,33 +120,27 @@ describe("extension handlers", () => {
         expect(ctx.ui.setStatus).not.toHaveBeenCalled()
     })
 
-    it("turn_start starts spinner in title (multi-turn)", async () => {
-        const ctx = createMockCtx()
-        const handler = mockPi._handlers.get("turn_start")!
-        await handler({ turnIndex: 1, timestamp: Date.now() }, ctx)
-
-        await new Promise((r) => setTimeout(r, 150))
-
-        expect(ctx.ui.setTitle).toHaveBeenCalled()
-        const firstCall = (ctx.ui.setTitle as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
-        expect(firstCall).toMatch(SPINNER_FRAME_REGEX)
-    })
-
-    it("agent_end restores green checkmark in title", async () => {
+    it("agent_settled restores green checkmark in title", async () => {
         const ctx = createMockCtx() // 25% ≤ 50%
-        const handler = mockPi._handlers.get("agent_end")!
-        await handler({ messages: [] }, ctx)
+        const handler = mockPi._handlers.get("agent_settled")!
+        await handler({ aborted: false }, ctx)
 
         expect(ctx.ui.setTitle).toHaveBeenCalledWith(`${AGENT_ICON} ${IDLE_ICON} ${EXPECTED_BASE_TITLE}`)
     })
 
-    it("session_shutdown sets plain base title", async () => {
-        const ctx = createMockCtx()
-        const handler = mockPi._handlers.get("session_shutdown")!
-        await handler({ reason: "quit" }, ctx)
+    it("agent_settled after an abort restores the idle title and stops the spinner", async () => {
+        const ctx = createMockCtx() // 25% ≤ 50%
+        await mockPi._handlers.get("agent_start")!({}, ctx)
+        await new Promise((r) => setTimeout(r, 150))
+        expect((ctx.ui.setTitle as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0)
 
-        expect(ctx.ui.setTitle).toHaveBeenCalledWith(`${AGENT_ICON} ${EXPECTED_BASE_TITLE}`)
-        expect(ctx.ui.setStatus).not.toHaveBeenCalled()
+        const callsBefore = (ctx.ui.setTitle as ReturnType<typeof vi.fn>).mock.calls.length
+        await mockPi._handlers.get("agent_settled")!({ aborted: true }, ctx)
+        expect(ctx.ui.setTitle).toHaveBeenLastCalledWith(`${AGENT_ICON} ${IDLE_ICON} ${EXPECTED_BASE_TITLE}`)
+
+        // The interval must be cleared, otherwise more frames would follow.
+        await new Promise((r) => setTimeout(r, 150))
+        expect((ctx.ui.setTitle as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore + 1)
     })
 })
 
@@ -199,8 +156,8 @@ describe("idle icon override", () => {
             const mockPi = createMockPi()
             mod.default(mockPi as unknown as ExtensionAPI)
             const ctx = createMockCtx() // 25% ≤ 50%
-            const handler = mockPi._handlers.get("agent_end")!
-            await handler({ messages: [] }, ctx)
+            const handler = mockPi._handlers.get("agent_settled")!
+            await handler({ aborted: false }, ctx)
             expect(ctx.ui.setTitle).toHaveBeenCalledWith(`${AGENT_ICON} 🏁 ${EXPECTED_BASE_TITLE}`)
         } finally {
             if (prev === undefined) delete process.env.PI_STATUS_IDLE_ICON
@@ -294,8 +251,8 @@ describe("context indicator", () => {
         const mod = await import("./pi-status.ts")
         mod.default(mockPi as unknown as ExtensionAPI)
 
-        const handler = mockPi._handlers.get("input")!
-        await handler({ source: "interactive", text: "test" }, ctx)
+        const handler = mockPi._handlers.get("agent_start")!
+        await handler({}, ctx)
         await new Promise((r) => setTimeout(r, 150))
 
         const titleCalls = (ctx.ui.setTitle as ReturnType<typeof vi.fn>).mock.calls

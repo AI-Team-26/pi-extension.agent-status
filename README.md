@@ -20,11 +20,20 @@ The base title is `session - project` (or just `project` without a session name)
 | Idle (50 – 89 % context)    | `π ✔️ [63%] session - project`          |
 | Idle (≥ 90 % context)       | `π ✔️ ![95%]! session - project`        |
 | Working                     | `π ⠋ session - project`                 |
-| Shutdown                    | `π session - project`                   |
 
 - The context-usage percentage is shown **only** beside the checkmark — never during the spinner. It's captured once when the idle state is shown, not updated live.
 - `< 50 %` → percentage hidden; `50 – 89 %` → `[N%]`; `≥ 90 %` → `![N%]!` (high-usage warning).
 - ANSI colours don't work inside terminal-title OSC sequences, so everything is plain text.
+
+## Events
+
+The extension listens to three pi events only:
+
+| Event           | Effect                        |
+| --------------- | ----------------------------- |
+| `session_start` | shows the idle title          |
+| `agent_start`   | starts the spinner            |
+| `agent_settled` | stops the spinner, idle title |
 
 ### Agent icon
 
