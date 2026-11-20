@@ -20,7 +20,6 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
-//const AGENT_ICON = Array.from(process.env.PI_STATUS_AGENT_ICON || "π")
 const AGENT_ICON = process.env.PI_STATUS_AGENT_ICON || "π"
 const IDLE_ICON = process.env.PI_STATUS_IDLE_ICON || "✔️"
 
@@ -47,13 +46,10 @@ function getContextIndicator(ctx: ExtensionContext): string {
 export default function (pi: ExtensionAPI) {
     let timer: ReturnType<typeof setInterval> | null = null
     let frameIndex = 0
-    // Latest context seen by any handler; the spinner interval must not keep
-    // using a stale context captured at spinner start.
+    // The spinner interval runs outside a handler, so it needs the latest context.
     let currentCtx: ExtensionContext | null = null
-    let sessionStarted = false
 
-    // A throwing setTitle (or title computation) inside the interval callback
-    // would kill the timer and freeze the title forever — always catch.
+    // A throwing setTitle inside the interval callback would kill the timer and freeze the title.
     function safeSetTitle(ctx: ExtensionContext, title: string) {
         try {
             ctx.ui.setTitle(`${AGENT_ICON} ${title}`)
@@ -73,83 +69,70 @@ export default function (pi: ExtensionAPI) {
 
     function restoreTitle(ctx: ExtensionContext) {
         log("restoring idle title")
+        let indicator = ""
         try {
-            const title = `${IDLE_ICON}${getContextIndicator(ctx)} ${getBaseTitle(pi)}`
-            safeSetTitle(ctx, title)
+            indicator = getContextIndicator(ctx)
         } catch (err) {
-            console.error("[pi-status] restore failed:", err)
+            // Context usage comes from live session state, which throws once the instance is stale.
+            log(`context indicator unavailable: ${err}`)
         }
+        let base: string
+        try {
+            base = getBaseTitle(pi)
+        } catch (err) {
+            log(`base title unavailable: ${err}`)
+            return
+        }
+        safeSetTitle(ctx, `${IDLE_ICON}${indicator} ${base}`)
     }
 
-    function showSpinnerFrame() {
+    /** Draws one spinner frame. Returns false when the spinner gave up and must not be armed. */
+    function showSpinnerFrame(): boolean {
         const ctx = currentCtx
-        if (!ctx) return
-        try {
-            const title = `${SPINNER_FRAMES[frameIndex % SPINNER_FRAMES.length]} ${getBaseTitle(pi)}`
-            safeSetTitle(ctx, title)
-        } catch (err) {
-            console.error("[pi-status] spinner frame failed:", err)
+        if (!ctx) {
+            stopSpinner()
+            return false
         }
+        let base: string
+        try {
+            base = getBaseTitle(pi)
+        } catch (err) {
+            // A throw inside the interval callback is fatal to pi, and a stale instance
+            // can never produce a valid title again, so stop instead of retrying.
+            log(`spinner frame skipped: ${err}`)
+            stopSpinner()
+            return false
+        }
+        safeSetTitle(ctx, `${SPINNER_FRAMES[frameIndex]} ${base}`)
         frameIndex = (frameIndex + 1) % SPINNER_FRAMES.length
+        return true
     }
 
     function startSpinner(ctx: ExtensionContext) {
         currentCtx = ctx
-        if (timer) {
-            frameIndex = 0
-            return
-        }
-        frameIndex = 0
-        showSpinnerFrame()
-        timer = setInterval(showSpinnerFrame, 2000)
+        if (timer) return
+        if (!showSpinnerFrame()) return
+        timer = setInterval(() => {
+            showSpinnerFrame()
+        }, 2000)
         ;(timer as any).unref?.()
         log("spinner started")
     }
 
-    function ensureSessionStarted(ctx: ExtensionContext) {
-        if (!sessionStarted) {
-            sessionStarted = true
-            currentCtx = ctx
-            // Do NOT schedule restoreTitle here — only session_start (deferred) and agent_end should restore idle title.
-            // This avoids a race where input fires before session_start and causes an unwanted idle title flash.
-        }
-    }
-
-// Events -------------------------------------------------------------------------------------------------------------
-
     pi.on("session_start", (_e, ctx) => {
-        stopSpinner() // clear any interval leaked from a previous session
+        stopSpinner() // clear any interval left over from a previous session
         currentCtx = ctx
-        sessionStarted = true
         // Defer to let pi's init-based updateTerminalTitle() fire first
         setImmediate(() => restoreTitle(ctx))
     })
 
-    
-    //pi.on("input", (_e, ctx) => {
-    //    ensureSessionStarted(ctx)
-    //    startSpinner(ctx)
-    //})
-
     pi.on("agent_start", (_e, ctx) => {
-        ensureSessionStarted(ctx)
         startSpinner(ctx)
     })
 
-    pi.on("turn_start", (_e, ctx) => {
-        ensureSessionStarted(ctx)
-        startSpinner(ctx)
-    })
-
-    pi.on("agent_end", (_e, ctx) => {
+    pi.on("agent_settled", (_e, ctx) => {
         currentCtx = ctx
         stopSpinner()
         restoreTitle(ctx)
-    })
-
-    pi.on("session_shutdown", (_e, ctx) => {
-        stopSpinner()
-        safeSetTitle(ctx, getBaseTitle(pi))
-        sessionStarted = false
     })
 }
