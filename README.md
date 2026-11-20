@@ -25,6 +25,14 @@ The base title is `session - project` (or just `project` without a session name)
 - `< 50 %` → percentage hidden; `50 – 89 %` → `[N%]`; `≥ 90 %` → `![N%]!` (high-usage warning).
 - ANSI colours don't work inside terminal-title OSC sequences, so everything is plain text.
 
+### Agent icon
+
+Set the **PI_STATUS_AGENT_ICON** environment variable to customise the leading icon (e.g. an emoji). Defaults to `π`. Note: only single-character values are supported for now.
+
+### Idle icon
+
+Set the **PI_STATUS_IDLE_ICON** environment variable to override the icon shown while pi is idle. Defaults to `✔️`.
+
 ## Events
 
 The extension listens to three pi events only:
@@ -34,14 +42,6 @@ The extension listens to three pi events only:
 | `session_start` | shows the idle title          |
 | `agent_start`   | starts the spinner            |
 | `agent_settled` | stops the spinner, idle title |
-
-### Agent icon
-
-Set the **PI_STATUS_AGENT_ICON** environment variable to customise the leading icon (e.g. an emoji). Defaults to `π`. Note: only single-character values are supported for now.
-
-### Idle icon
-
-Set the **PI_STATUS_IDLE_ICON** environment variable to override the icon shown while pi is idle. Defaults to `✔️`.
 
 
 ## Install
