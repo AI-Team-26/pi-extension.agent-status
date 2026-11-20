@@ -1,4 +1,4 @@
-# pi-status
+# Pi extension - pi-status
 
 A [pi](https://github.com/earendil-works/pi-coding-agent) extension that puts a **✔️ green checkmark** in your terminal title when the agent is idle, and a **⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ braille-dot spinner** while it's working — so you can tell at a glance whether pi is done or still thinking.
   
@@ -41,11 +41,17 @@ Set the **PI_STATUS_IDLE_ICON** environment variable to override the icon shown 
 pi install https://github.com/AI-Team-26/pi-status
 ```
 
+## Develop
+
+```sh
+pnpm install        # syntax intellisense
+```
+
 ## Test
 
 ```sh
-npm test        # single run
-npm run test:watch  # watch mode
+pnpm test            # single run
+pnpm run test:watch  # watch mode
 ```
 
 

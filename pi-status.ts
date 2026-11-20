@@ -115,6 +115,8 @@ export default function (pi: ExtensionAPI) {
         }
     }
 
+// Events -------------------------------------------------------------------------------------------------------------
+
     pi.on("session_start", (_e, ctx) => {
         stopSpinner() // clear any interval leaked from a previous session
         currentCtx = ctx
@@ -123,10 +125,11 @@ export default function (pi: ExtensionAPI) {
         setImmediate(() => restoreTitle(ctx))
     })
 
-    pi.on("input", (_e, ctx) => {
-        ensureSessionStarted(ctx)
-        startSpinner(ctx)
-    })
+    
+    //pi.on("input", (_e, ctx) => {
+    //    ensureSessionStarted(ctx)
+    //    startSpinner(ctx)
+    //})
 
     pi.on("agent_start", (_e, ctx) => {
         ensureSessionStarted(ctx)

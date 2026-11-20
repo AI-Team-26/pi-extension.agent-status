@@ -1,7 +1,7 @@
 # Gitleaks configuration for pi-idle extension repository.
 # This is a Node.js / TypeScript project with no secrets expected.
 
-title = "pi-idle gitleaks config"
+title = "pi-status gitleaks config"
 
 # Extend the default ruleset. Rules are defined inline below.
 # We keep only the rules that are relevant for a small TS project
