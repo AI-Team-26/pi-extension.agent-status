@@ -12,7 +12,7 @@ A [pi](https://github.com/earendil-works/pi-coding-agent) extension that puts a 
 
 ## Title format
 
-The base title is `session - project` (or just `project` without a session name), always prefixed by the agent icon:
+The base title is `session - project` (or just `project` without a session name), prefixed by the agent icon:
 
 | State                    | Title                            |
 | ------------------------ | -------------------------------- |
@@ -20,7 +20,6 @@ The base title is `session - project` (or just `project` without a session name)
 | Idle (50 – 89 % context) | `π ✔️ [63%] session - project`   |
 | Idle (≥ 90 % context)    | `π ✔️ ![95%]! session - project` |
 | Working                  | `π ⠋ session - project`          |
-| Shutdown                 | `π session - project`            |
 
 - The context-usage percentage is shown **only** beside the checkmark — never during the spinner. It's captured once when the idle state is shown, not updated live.
 - `< 50 %` → percentage hidden; `50 – 89 %` → `[N%]`; `≥ 90 %` → `![N%]!` (high-usage warning).
